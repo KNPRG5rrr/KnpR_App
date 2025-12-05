@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Общий чат</title>
+<style>
+body { font-family: Arial; display:flex; justify-content:center; padding-top:50px; background:#f0f2f5;}
+#container { width:500px; background:white; border-radius:10px; padding:20px; box-shadow:0 4px 10px rgba(0,0,0,0.1);}
+#chat { border:1px solid #ccc; height:400px; overflow-y:scroll; padding:10px; margin-bottom:10px; border-radius:5px; background:#fafafa;}
+input, button { padding:5px; margin-right:5px; border-radius:5px; border:1px solid #ccc;}
+input { width:60%;}
+#name { width:35%; margin-bottom:5px;}
+button { width:20%;}
+.message { margin:5px 0; }
+.message span { font-weight:bold; margin-right:5px; }
+</style>
+</head>
+<body>
+<div id="container">
+  <h2>Общий чат</h2>
+  <input id="name" placeholder="Введите имя">
+  <div id="chat"></div>
+  <input id="msg" placeholder="Введите сообщение">
+  <button onclick="sendMessage()">Отправить</button>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+// Подключение к твоему Replit-серверу
+const socket = io('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev');
+
+const chatDiv = document.getElementById('chat');
+const msgInput = document.getElementById('msg');
+const nameInput = document.getElementById('name');
+
+// Получаем историю чата
+socket.on("chat history", (history) => {
+    history.forEach(data => {
+        const p = document.createElement('div');
+        p.classList.add('message');
+        p.id = data.id;
+        p.innerHTML = `<span>${data.name}:</span> ${data.msg}`;
+        chatDiv.appendChild(p);
+    });
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+});
+
+// Новые сообщения
+socket.on("chat message", (data) => {
+    const p = document.createElement('div');
+    p.classList.add('message');
+    p.id = data.id;
+    p.innerHTML = `<span>${data.name}:</span> ${data.msg}`;
+    chatDiv.appendChild(p);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+});
+
+// Удаление сообщений
+socket.on("delete message", (id) => {
+    const el = document.getElementById(id);
+    if(el) el.remove();
+});
+
+// Отправка сообщений
+function sendMessage() {
+    const name = nameInput.value.trim() || "Аноним";
+    const msg = msgInput.value.trim();
+    if(!msg) return;
+    socket.emit("chat message", { msg, name });
+    msgInput.value = '';
+}
+</script>
+</body>
+</html>
