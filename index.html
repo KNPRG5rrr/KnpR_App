@@ -3,23 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Чат с никами и удалением</title>
+<title>Чат с логином и контактами</title>
 <style>
-body { font-family: Arial; display:flex; justify-content:center; padding-top:50px; background:#f0f2f5;}
-#container { width:500px; background:white; border-radius:10px; padding:20px; box-shadow:0 4px 10px rgba(0,0,0,0.1);}
-#chat { border:1px solid #ccc; height:400px; overflow-y:scroll; padding:10px; margin-bottom:10px; border-radius:5px; background:#fafafa;}
-input, button { padding:5px; margin-right:5px; border-radius:5px; border:1px solid #ccc;}
-input { width:60%;}
-#name { width:35%; margin-bottom:5px;}
-button { width:20%;}
+body { font-family: Arial; display:flex; justify-content:center; padding-top:30px; background:#f0f2f5;}
+#loginDiv, #chatDiv { width:400px; background:white; border-radius:10px; padding:20px; box-shadow:0 4px 10px rgba(0,0,0,0.1);}
+#chat { border:1px solid #ccc; height:300px; overflow-y:scroll; padding:10px; margin-bottom:10px; border-radius:5px; background:#fafafa;}
+input, button { padding:5px; margin-bottom:5px; border-radius:5px; border:1px solid #ccc; width:100%;}
 .message { margin:5px 0; }
 .message span { font-weight:bold; margin-right:5px; }
+button.delete { margin-left:5px; padding:2px 5px; font-size:12px; }
+#contacts p { margin:2px 0; }
 </style>
 </head>
 <body>
-<div id="container">
+
+<div id="loginDiv">
+  <h2>Вход / Регистрация</h2>
+  <input id="username" placeholder="Логин"><br>
+  <input id="password" type="password" placeholder="Пароль"><br>
+  <button onclick="register()">Регистрация</button>
+  <button onclick="login()">Войти</button>
+  <p id="loginMsg"></p>
+</div>
+
+<div id="chatDiv" style="display:none;">
   <h2>Чат</h2>
-  <input id="name" placeholder="Введите имя">
+  <h3>Контакты</h3>
+  <div id="contacts"></div>
   <div id="chat"></div>
   <input id="msg" placeholder="Введите сообщение">
   <button onclick="sendMessage()">Отправить</button>
@@ -27,50 +37,86 @@ button { width:20%;}
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
-// Подключение к твоему Replit серверу
-const socket = io('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev');
+let socket = null;
+let currentUser = null;
 
-const chatDiv = document.getElementById('chat');
-const msgInput = document.getElementById('msg');
-const nameInput = document.getElementById('name');
-
-function addMessage(data){
-    const p = document.createElement('div');
-    p.classList.add('message');
-    p.id = data.id;
-    p.innerHTML = `<span>${data.name}:</span> ${data.msg}`;
-
-    // Кнопка удаления только для автора
-    if(data.author === socket.id){
-        const delBtn = document.createElement('button');
-        delBtn.textContent = "Удалить";
-        delBtn.onclick = () => socket.emit('delete message', data.id);
-        p.appendChild(delBtn);
-    }
-
-    chatDiv.appendChild(p);
-    chatDiv.scrollTop = chatDiv.scrollHeight;
+// Функции для логина и регистрации
+async function register(){
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const res = await fetch('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev/register', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({username, password})
+    });
+    const data = await res.json();
+    document.getElementById('loginMsg').textContent = data.success ? "Регистрация успешна" : data.error;
 }
 
-// История чата
-socket.on("chat history", history => history.forEach(addMessage));
+async function login(){
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const res = await fetch('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev/login', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({username, password})
+    });
+    const data = await res.json();
+    if(data.success){
+        currentUser = username;
+        document.getElementById('loginDiv').style.display='none';
+        document.getElementById('chatDiv').style.display='block';
+        initChat();
+    } else {
+        document.getElementById('loginMsg').textContent = data.error;
+    }
+}
 
-// Новые сообщения
-socket.on("chat message", addMessage);
+// Инициализация чата
+function initChat(){
+    socket = io('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev');
+    socket.username = currentUser;
 
-// Удаление сообщений
-socket.on("delete message", id => {
-    const el = document.getElementById(id);
-    if(el) el.remove();
-});
+    const chatDivEl = document.getElementById('chat');
+    const contactsDiv = document.getElementById('contacts');
+
+    function addMessage(data){
+        const p = document.createElement('div');
+        p.classList.add('message');
+        p.id = data.id;
+        p.innerHTML = `<span>${data.user}:</span> ${data.msg}`;
+        if(data.user === currentUser){
+            const delBtn = document.createElement('button');
+            delBtn.textContent = "Удалить";
+            delBtn.classList.add('delete');
+            delBtn.onclick = ()=> socket.emit('delete message', data.id);
+            p.appendChild(delBtn);
+        }
+        chatDivEl.appendChild(p);
+        chatDivEl.scrollTop = chatDivEl.scrollHeight;
+    }
+
+    socket.on("chat history", history => history.forEach(addMessage));
+    socket.on("chat message", addMessage);
+    socket.on("delete message", id => {
+        const el = document.getElementById(id);
+        if(el) el.remove();
+    });
+
+    // Получаем контакты
+    fetch('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev/contacts')
+        .then(r=>r.json())
+        .then(data => {
+            contactsDiv.innerHTML = data.map(u => `<p>${u}</p>`).join('');
+        });
+}
 
 // Отправка сообщений
-function sendMessage() {
-    const name = nameInput.value.trim() || "Аноним";
-    const msg = msgInput.value.trim();
+function sendMessage(){
+    const msg = document.getElementById('msg').value.trim();
     if(!msg) return;
-    socket.emit("chat message", { name, msg });
-    msgInput.value = '';
+    socket.emit('chat message', { user: currentUser, msg });
+    document.getElementById('msg').value='';
 }
 </script>
 </body>
