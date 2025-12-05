@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Чат с логином и контактами</title>
+<title>Чат с логином</title>
 <style>
 body { font-family: Arial; display:flex; justify-content:center; padding-top:30px; background:#f0f2f5;}
 #loginDiv, #chatDiv { width:400px; background:white; border-radius:10px; padding:20px; box-shadow:0 4px 10px rgba(0,0,0,0.1);}
@@ -37,48 +37,47 @@ button.delete { margin-left:5px; padding:2px 5px; font-size:12px; }
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
-let socket = null;
+// Локальные данные для демонстрации
+let users = []; // зарегистрированные пользователи {username, password}
+let contacts = [];
 let currentUser = null;
+let chatHistory = [];
 
-// Функции для логина и регистрации
-async function register(){
+function register(){
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value.trim();
-    const res = await fetch('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev/register', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({username, password})
-    });
-    const data = await res.json();
-    document.getElementById('loginMsg').textContent = data.success ? "Регистрация успешна" : data.error;
+    if(!username || !password) return alert("Введите логин и пароль");
+    if(users.find(u=>u.username===username)) return alert("Пользователь уже существует");
+    users.push({username,password});
+    contacts.push(username);
+    alert("Регистрация успешна");
 }
 
-async function login(){
+function login(){
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value.trim();
-    const res = await fetch('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev/login', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({username, password})
-    });
-    const data = await res.json();
-    if(data.success){
-        currentUser = username;
-        document.getElementById('loginDiv').style.display='none';
-        document.getElementById('chatDiv').style.display='block';
-        initChat();
-    } else {
-        document.getElementById('loginMsg').textContent = data.error;
-    }
+    const user = users.find(u=>u.username===username && u.password===password);
+    if(!user) return alert("Неверный логин или пароль");
+    currentUser = username;
+    document.getElementById('loginDiv').style.display='none';
+    document.getElementById('chatDiv').style.display='block';
+    initChat();
+    showContacts();
+}
+
+// Отображение контактов
+function showContacts(){
+    const contactsDiv = document.getElementById('contacts');
+    contactsDiv.innerHTML = contacts.map(c=>`<p>${c}</p>`).join('');
 }
 
 // Инициализация чата
+let socket = null;
 function initChat(){
     socket = io('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev');
     socket.username = currentUser;
 
     const chatDivEl = document.getElementById('chat');
-    const contactsDiv = document.getElementById('contacts');
 
     function addMessage(data){
         const p = document.createElement('div');
@@ -96,27 +95,24 @@ function initChat(){
         chatDivEl.scrollTop = chatDivEl.scrollHeight;
     }
 
+    // История сообщений
     socket.on("chat history", history => history.forEach(addMessage));
     socket.on("chat message", addMessage);
     socket.on("delete message", id => {
         const el = document.getElementById(id);
         if(el) el.remove();
     });
-
-    // Получаем контакты
-    fetch('https://c64b8f1b-caab-4249-9258-f0cb9ac11ecb-00-3tv4oshnskwz2.janeway.replit.dev/contacts')
-        .then(r=>r.json())
-        .then(data => {
-            contactsDiv.innerHTML = data.map(u => `<p>${u}</p>`).join('');
-        });
 }
 
 // Отправка сообщений
 function sendMessage(){
-    const msg = document.getElementById('msg').value.trim();
+    const msgInput = document.getElementById('msg');
+    const msg = msgInput.value.trim();
     if(!msg) return;
-    socket.emit('chat message', { user: currentUser, msg });
-    document.getElementById('msg').value='';
+    const data = { id: Date.now()+"_"+Math.random().toString(36).substr(2,5), user: currentUser, msg };
+    chatHistory.push(data);
+    socket.emit('chat message', data);
+    msgInput.value='';
 }
 </script>
 </body>
